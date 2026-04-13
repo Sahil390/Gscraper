@@ -1,5 +1,10 @@
 # Coventry University Course Scraper
 
+## Demo Video
+
+[Watch Demo Video](https://drive.google.com/file/d/1njDXPe7MpD71CFKuuEuX4rGF0tW5vp9r/view?usp=sharing)
+
+
 ## About
 This is a web scraping project built for the internship assignment.
 
