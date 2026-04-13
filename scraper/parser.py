@@ -101,7 +101,34 @@ def get_grad(txt):
     m = re.search(r"(\d{2})%[^.]{0,80}(undergraduate degree)", txt, re.I)
     return m.group(1) + "%" if m else "NA"
 
+def get_dur(soup):
+    h = soup.find("h3", string=lambda x: x and "Duration" in x)
+    if not h:
+        return "NA"
 
+    p = h.find_next("p")
+    if not p:
+        return "NA"
+
+    lines = list(p.stripped_strings)
+
+    out = []
+    cur = ""
+
+    for line in lines:
+        if ":" in line:   # BSc: / MEng:
+            if cur:
+                out.append(cur.strip())
+            cur = line
+        else:
+            cur += " " + line
+
+    if cur:
+        out.append(cur.strip())
+
+    return " / ".join(out)
+
+    
 def parse_course(u):
     soup, html = get_soup(u)
     txt = soup.get_text(" ", strip=True)
@@ -115,7 +142,7 @@ def parse_course(u):
         lvl = "Postgraduate"
 
     camp = get_dl(html, "faculty")
-    dur = get_dl(html, "studyMode")
+    # dur = get_dl(html, "studyMode")
 
     if name == "NA":
         h1 = soup.find("h1")
@@ -137,7 +164,7 @@ def parse_course(u):
         "address": "Coventry, UK",
 
         "study_level": lvl,
-        "course_duration": dur,
+        "course_duration": get_dur(soup),
 
         "all_intakes_available": get_intake(txt),
 
