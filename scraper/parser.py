@@ -93,12 +93,12 @@ def get_waiver(txt):
 
 
 def get_12th(txt):
-    m = re.search(r"(60|65)%[^.]{0,50}(XII|12)", txt, re.I)
+    m = re.search(r"(\d{2})%[^.]{0,40}(XII|12)", txt, re.I)
     return m.group(1) + "%" if m else "NA"
 
 
 def get_grad(txt):
-    m = re.search(r"(60|55)%[^.]{0,50}(degree|undergraduate)", txt, re.I)
+    m = re.search(r"(\d{2})%[^.]{0,80}(undergraduate degree)", txt, re.I)
     return m.group(1) + "%" if m else "NA"
 
 
@@ -108,6 +108,12 @@ def parse_course(u):
 
     name = get_dl(html, "courseName")
     lvl = get_dl(html, "levelOfStudy")
+    
+    if "/ug/" in u:
+        lvl = "Undergraduate"
+    elif "/pg/" in u:
+        lvl = "Postgraduate"
+
     camp = get_dl(html, "faculty")
     dur = get_dl(html, "studyMode")
 
