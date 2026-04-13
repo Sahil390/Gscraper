@@ -1,29 +1,31 @@
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 
-BASE_URL = "https://www.coventry.ac.uk"
+BASE = "https://www.coventry.ac.uk"
 
-def get_course_links():
-    url = "https://www.coventry.ac.uk/study-at-coventry/undergraduate-study/course-finder/"
+def get_links():
+    url = BASE + "/study-at-coventry/undergraduate-study/course-finder/"
     
     res = requests.get(url)
     soup = BeautifulSoup(res.text, "lxml")
 
     links = set()
 
-    # 🔥 target only course divs
-    courses = soup.find_all("div", class_="course")
+    # get only course blocks
+    for c in soup.find_all("div", class_="course"):
+        a = c.find("a", href=True)
 
-    for course in courses:
-        a_tag = course.find("a", href=True)
+        if not a:
+            continue
 
-        if a_tag:
-            href = a_tag["href"]
+        h = a["href"]
 
-            # convert relative → absolute
-            if not href.startswith("http"):
-                href = BASE_URL + href
+        if not h.startswith("http"):
+            h = urljoin(BASE, h)
 
-            links.add(href)
+        links.add(h)
 
     return list(links)[:5]
+
+# print(get_links())
