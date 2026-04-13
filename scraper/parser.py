@@ -37,26 +37,35 @@ def get_india():
 @lru_cache(maxsize=1)
 def get_docs():
     soup, _ = get_soup(DOC_URL)
+
     rows = soup.select("table tbody tr")
 
     docs = []
     for r in rows:
-        td = r.select_one("td")
-        if not td:
+        th = r.find("th")   # 🔥 key fix
+
+        if not th:
             continue
 
-        t = td.get_text(strip=True)
+        txt = th.get_text(" ", strip=True)
 
-        if t and "checklist" not in t.lower():
-            docs.append(t)
+        if txt:
+            docs.append(txt)
 
     return ", ".join(dict.fromkeys(docs)) if docs else "NA"
 
+    
+def extract_fee(soup):
+    # try correct international fee first
+    fee_tag = soup.select_one(".Fees-International-FullTime")
 
-def get_fee(txt):
-    m = re.search(r"£\s?\d{1,3}(?:,\d{3})+", txt)
-    return m.group(0).replace(" ", "") if m else "NA"
+    if fee_tag:
+        return fee_tag.get_text(" ", strip=True)
 
+    # fallback (if structure changes)
+    text = soup.get_text(" ", strip=True)
+    match = re.search(r"£\s?\d{1,3}(?:,\d{3})+", text)
+    return match.group(0) if match else "NA"
 
 def get_intake(txt):
     m = re.findall(r"\b(?:September|November|January|March|May|July)\s+\d{4}\b", txt)
@@ -127,7 +136,7 @@ def parse_course(u):
         "all_intakes_available": get_intake(txt),
 
         "mandatory_documents_required": get_docs(),
-        "yearly_tuition_fee": get_fee(txt),
+        "yearly_tuition_fee": extract_fee(soup),
 
         "scholarship_availability": "NA",
         "gre_gmat_mandatory_min_score": "NA",
