@@ -3,7 +3,9 @@ import requests
 from bs4 import BeautifulSoup
 from functools import lru_cache
 
-BASE = "https://www.coventry.ac.uk/international-students-hub/entry-requirements/"
+INDIA_URL = "https://www.coventry.ac.uk/international-students-hub/entry-requirements/"
+DOC_URL = "https://www.coventry.ac.uk/london/study/how-to-apply/document-checklist/"
+
 sess = requests.Session()
 
 
@@ -13,10 +15,10 @@ def get_soup(u):
     return BeautifulSoup(r.text, "lxml"), r.text
 
 
-def get_dl_val(html, key):
+def get_dl(html, k):
     pats = [
-        rf"'{re.escape(key)}'\s*:\s*'([^']*)'",
-        rf'"{re.escape(key)}"\s*:\s*"([^"]*)"',
+        rf"'{re.escape(k)}'\s*:\s*'([^']*)'",
+        rf'"{re.escape(k)}"\s*:\s*"([^"]*)"',
     ]
     for p in pats:
         m = re.search(p, html, re.DOTALL)
@@ -27,28 +29,28 @@ def get_dl_val(html, key):
 
 @lru_cache(maxsize=1)
 def get_india():
-    soup, _ = get_soup(BASE)
+    soup, _ = get_soup(INDIA_URL)
     b = soup.select_one(".js-c-india")
-    return b if b else None
+    return b.get_text(" ", strip=True) if b else "NA"
 
 
-def get_sec(b, name):
-    if not b:
-        return "NA"
+@lru_cache(maxsize=1)
+def get_docs():
+    soup, _ = get_soup(DOC_URL)
+    rows = soup.select("table tbody tr")
 
-    h = b.find("h3", string=re.compile(rf"^{re.escape(name)}$", re.I))
-    if not h:
-        return "NA"
+    docs = []
+    for r in rows:
+        td = r.select_one("td")
+        if not td:
+            continue
 
-    out = []
-    for s in h.find_next_siblings():
-        if s.name == "h3":
-            break
-        t = s.get_text(" ", strip=True)
-        if t:
-            out.append(t)
+        t = td.get_text(strip=True)
 
-    return " ".join(out) if out else "NA"
+        if t and "checklist" not in t.lower():
+            docs.append(t)
+
+    return ", ".join(dict.fromkeys(docs)) if docs else "NA"
 
 
 def get_fee(txt):
@@ -62,24 +64,7 @@ def get_intake(txt):
     for x in m:
         if x not in seen:
             seen.append(x)
-    return " ".join(seen[:6]) if seen else "NA"
-
-
-def find_pct(txt, keys, w=200):
-    low = txt.lower()
-
-    for k in keys:
-        for m in re.finditer(re.escape(k.lower()), low):
-            s = max(0, m.start() - w)
-            e = min(len(txt), m.end() + w)
-
-            chunk = txt[s:e]
-            p = re.search(r"\b\d{1,2}(?:\.\d)?%", chunk)
-
-            if p:
-                return p.group(0)
-
-    return "NA"
+    return " ".join(sorted(seen)) if seen else "NA"
 
 
 def get_ielts(txt):
@@ -94,28 +79,28 @@ def get_boards(txt):
 
 def get_waiver(txt):
     if "Standard XII English language" in txt:
-        return "Available based on Class 12 English marks"
+        return "Available based on Class 12 English"
     return "NA"
 
 
-def get_gpa(txt, lvl):
-    if txt == "NA":
-        return "NA"
+def get_12th(txt):
+    m = re.search(r"(60|65)%[^.]{0,50}(XII|12)", txt, re.I)
+    return m.group(1) + "%" if m else "NA"
 
-    if "Postgraduate" in lvl:
-        return find_pct(txt, ["undergraduate degree", "three year", "four year"])
 
-    return find_pct(txt, ["standard xii", "class 12", "12th"])
+def get_grad(txt):
+    m = re.search(r"(60|55)%[^.]{0,50}(degree|undergraduate)", txt, re.I)
+    return m.group(1) + "%" if m else "NA"
 
 
 def parse_course(u):
     soup, html = get_soup(u)
     txt = soup.get_text(" ", strip=True)
 
-    name = get_dl_val(html, "courseName")
-    lvl = get_dl_val(html, "levelOfStudy")
-    camp = get_dl_val(html, "faculty")
-    dur = get_dl_val(html, "studyMode")
+    name = get_dl(html, "courseName")
+    lvl = get_dl(html, "levelOfStudy")
+    camp = get_dl(html, "faculty")
+    dur = get_dl(html, "studyMode")
 
     if name == "NA":
         h1 = soup.find("h1")
@@ -126,10 +111,6 @@ def parse_course(u):
         camp = loc.get_text(" ", strip=True) if loc else "NA"
 
     india = get_india()
-    ug = get_sec(india, "Undergraduate")
-    pg = get_sec(india, "Postgraduate")
-
-    sec = pg if "Postgraduate" in lvl else ug
 
     return {
         "program_course_name": name,
@@ -145,7 +126,7 @@ def parse_course(u):
 
         "all_intakes_available": get_intake(txt),
 
-        "mandatory_documents_required": "NA",
+        "mandatory_documents_required": get_docs(),
         "yearly_tuition_fee": get_fee(txt),
 
         "scholarship_availability": "NA",
@@ -153,23 +134,23 @@ def parse_course(u):
 
         "indian_regional_institution_restrictions": "NA",
 
-        "class_12_boards_accepted": get_boards(sec),
+        "class_12_boards_accepted": get_boards(india),
 
         "gap_year_max_accepted": "NA",
         "min_duolingo": "NA",
 
-        "english_waiver_class12": get_waiver(sec),
+        "english_waiver_class12": get_waiver(india),
         "english_waiver_moi": "NA",
 
-        "min_ielts": get_ielts(sec),
+        "min_ielts": get_ielts(india),
 
         "kaplan_test_of_english": "NA",
         "min_pte": "NA",
         "min_toefl": "NA",
 
-        "ug_academic_min_gpa": get_gpa(sec, lvl),
+        "ug_academic_min_gpa": get_grad(india) if "Postgraduate" in lvl else "NA",
+        "twelfth_pass_min_cgpa": get_12th(india) if "Undergraduate" in lvl else "NA",
 
-        "twelfth_pass_min_cgpa": "NA",
         "mandatory_work_exp": "NA",
         "max_backlogs": "NA",
     }
